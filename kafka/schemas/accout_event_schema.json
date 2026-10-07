@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "AccountEvent",
+    "type":"object",
+    "required": [   "event_id","event_type",
+                    "account_id","customer_id","event_timestamp"], 
+    "properties": {
+        "event_id": {"type":"string","format": "uuid"},
+        "event_type":{"type":"string", "enum": ["credit","debit"]},
+        "account_id":{"type": "string","format": "uuid"},
+        "customer_id":{"type":"string","format": "uuid"},
+        "product_id":{"type":"string","format": "uuid"},
+        "branch_id":{"type":"string","format": "uuid"},
+        "accout_number":{"type":"string", "maxLength": 50},
+        "account_status":{"type":"string", "enum": ["active", "inactive", "closed"]},
+        "opening_date":{"type":"string", "format": "date-time"},
+        "closing_date":{"type":"string","format": "date-time"},
+        "event_timestamp":{"type":"string","format": "date-time"}
+    },
+    "additionalProperties": false
+}

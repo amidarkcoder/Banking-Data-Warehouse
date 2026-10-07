@@ -1,0 +1,51 @@
+import json,os
+
+import psycopg2
+from psycopg2.extras import execute_values
+from kafka import KafkaConsumer
+
+TOPIC = os.getenv("TRANSACTION_TOPIC", "transaction_events")
+GROUP_ID = "transaction-raw-writer"
+TABLE = "raw.transaction_events"
+COLUMNS = ["event_id", "transaction_id", "account_id", "customer_id", "product_id", "branch_id", "transaction_type", 
+           "transaction_status", "transaction_amount", "currency_code", "transaction_timestamp", "merchant_name", "channel"]
+
+INSERT_SQL = f"""
+    insert into {TABLE} ({", ".join(COLUMNS)})
+    values %s
+    on conflict (event_id) do nothing
+"""
+
+def main():
+    conn = psycopg2.connect(
+        host = os.getenv("POSTGRES_HOST","localhost"),
+        dbname = os.getenv("POSTGRES_DB","enterprise_dw"),
+        user = os.getenv("POSTGRES_USER", "postgres"),
+        password = os.getenv("POSTGRES_PASSWORD","")## need to put password
+    )
+
+    consumer = KafkaConsumer(
+        TOPIC,
+        bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP", "localhost:9092"),
+        group_id = GROUP_ID,
+        enable_auto_commit = False,
+        auto_offset_reset = "earliest",
+        value_deserializer = lambda b: json.loads(b.decode("utf-8"))
+    )
+
+    while True:
+        batches = consumer.poll(timeout_ms=5000, max_records=500)
+        messages = [m for msgs in batches.values() for m in msgs]
+        if not messages:
+            break
+
+        rows = [tuple(m.value.get(c) for c in COLUMNS) for m in messages]
+        with conn.cursor() as cur:
+            execute_values(cur, INSERT_SQL, rows)
+        conn.commit()
+        consumer.commit()
+
+    conn.close()
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,25 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "TransactionEvent",
+    "type":"object",
+    "required": [   "event_id","event_type",
+                    "transaction_id","account_id","customer_id","transaction_type","transaction_status",
+                    "transaction_amount","currency_code","transaction_timestamp","channel"],
+    "properties": {
+        "event_id":{"type":"string","format": "uuid"},
+        "event_type":{"type":"string", "enum": ["TRANSACTION_CREATED"]},
+        "transaction_id":{"type":"string","format": "uuid"},
+        "account_id":{"type":"string","format": "uuid"},
+        "customer_id":{"type":"string","format": "uuid"},
+        "product_id":{"type":"string","format": "uuid"},
+        "branch_id":{"type":"string","format": "uuid"},
+        "transaction_type":{"type":"string", "enum":["DEPOSIT","WITHDRAWAL","TRANSFER","PAYMENT","REFUND"]},
+        "transaction_status":{"type":"string", "enum":["COMPLETED","PENDING","FAILED","REVERSED"]},
+        "transaction_amount":{"type":"number", "exclusiveMinimum": 0},
+        "currency_code":{"type":"string", "pattern": "^[A-Z]{3}$"},
+        "transaction_timestamp":{"type":"string","format": "date-time"},
+        "merchant_name":{"type":"string", "maxLength": 50},
+        "channel":{"type":"string","enum": ["ONLINE","RETAIL","WHOLESALE","DIRECT","PARTNER"]}
+    },
+    "additionalProperties": false
+}
