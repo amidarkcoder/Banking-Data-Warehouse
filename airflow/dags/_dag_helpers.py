@@ -1,10 +1,10 @@
-"""Shared settings for the DAGs (this file defines no DAG itself)."""
+
 import os
 from datetime import datetime, timedelta
 
 from airflow.operators.bash import BashOperator
 
-# Folder where the whole project is mounted inside the Airflow container.
+
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", "/opt/airflow/project")
 DEFAULT_ARGS = {
     "owner": "data-engineering",

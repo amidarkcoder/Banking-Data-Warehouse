@@ -7,14 +7,14 @@ from _dag_helpers import DEFAULT_ARGS, run_script
 with DAG(
     dag_id="ingest_pipeline",
     default_args=DEFAULT_ARGS,
-    start_date=datetime(2026, 10, 5),
+    start_date=datetime(2026, 10, 8),
     schedule="@hourly",
     catchup=False,
-    max_active_runs=1000,
+    max_active_runs=1,
     tags=["ingest", "kafka"],
 ) as dag:
 
-    generate = run_script("generate_data", "data_generator", "generate_all.py")
+    
 
     consume_customers    = run_script("consume_customers",    "kafka/consumers", "customer_consumer.py")
     consume_accounts     = run_script("consume_accounts",     "kafka/consumers", "account_consumer.py")
@@ -32,7 +32,6 @@ with DAG(
         wait_for_completion=False,
     )
 
-    generate >> [consume_customers, consume_accounts, consume_transactions]
     consume_customers    >> transform_customers >> apply_scd3
     consume_accounts     >> transform_accounts
     consume_transactions >> transform_transactions

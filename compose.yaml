@@ -191,6 +191,21 @@ services:
       superset-init:
         condition: service_completed_successfully
     command: ["superset", "run", "-h", "0.0.0.0", "-p", "8088", "--with-threads"]
+  
+  event-generator:
+    build: ./data_generator
+    env_file: .env
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP: kafka:29092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    command: ["python", "generate_all.py", "--stream", "--rate", "5"]
 
   # ---------------- Tools (not started by default) ----------------
   # docker compose run --rm kafka-tools python kafka/producers/customer_producer.py

@@ -1,20 +1,12 @@
-"""
-Generate fake banking events and publish them to Kafka.
-
-- Reference data (branches, products, channels) is read from the seeded
-  warehouse.dim_* tables, so every event links to a real row.
-- Event data (customers, accounts, transactions) is faked and published.
-
-Usage:
-    python generate_all.py            # generate + publish to Kafka
-    python generate_all.py --dry-run  # generate only, print counts
-"""
 import json
 import sys
-
+import argparse
+import random
+import signal
+import time
 import psycopg2
-from kafka import KafkaProducer
 
+from kafka import KafkaProducer
 import config
 from faker_account import faker_account
 from faker_customer import faker_customer
@@ -69,8 +61,6 @@ def publish(data):
         acks="all",
     )
 
-    # Order matters: customers before accounts before transactions.
-    # The message key keeps all events of one entity in the same partition, in order.
     for name, key_field in [
         ("customers",    "customer_id"),
         ("accounts",     "account_id"),
@@ -85,10 +75,68 @@ def publish(data):
     producer.close()
 
 
-if __name__ == "__main__":
-    data = generate_all()
-    for name, rows in data.items():
-        print(f"{name}: {len(rows)} rows")
 
-    if "--dry-run" not in sys.argv:
-        publish(data)
+_running = True
+
+
+def _stop(signum, frame):
+    global _running
+    _running = False
+    print("\nShutdown signal received, flushing...")
+
+
+def stream(rate):
+    """Continuously emit transactions referencing a live pool of accounts."""
+    signal.signal(signal.SIGINT, _stop)
+    signal.signal(signal.SIGTERM, _stop)
+
+    producer = KafkaProducer(
+        bootstrap_servers=config.KAFKA_BOOTSTRAP,
+        key_serializer=lambda k: k.encode("utf-8") if k else None,
+        value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
+        acks="all",
+    )
+
+    data = generate_all()
+    for name, key in [("customers", "customer_id"), ("accounts", "account_id")]:
+        for row in data[name]:
+            producer.send(config.TOPICS[name], key=row[key], value=row)
+        producer.flush()
+        print(f"Seeded {len(data[name])} {name}")
+
+    accounts = data["accounts"]
+    _, _, channels = load_reference_data()
+    interval = 1.0 / rate
+    sent = 0
+
+    print(f"Streaming ~{rate} txn/sec. Ctrl-C to stop.")
+    while _running:
+        txn = faker_transaction(accounts, 1, channels)[0]
+        producer.send(config.TOPICS["transactions"],
+                      key=txn["account_id"], value=txn)
+        sent += 1
+        if sent % 100 == 0:
+            producer.flush()
+            print(f"  sent {sent} transactions")
+        time.sleep(interval)
+
+    producer.flush()
+    producer.close()
+    print(f"Stopped after {sent} transactions")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--stream", action="store_true", help="run continuously")
+    ap.add_argument("--rate", type=float, default=5.0, help="transactions per second")
+    ap.add_argument("--dry-run", action="store_true", help="generate only, no publish")
+    args = ap.parse_args()
+
+    if args.stream:
+        stream(args.rate)
+    else:
+        data = generate_all()
+        for name, rows in data.items():
+            print(f"{name}: {len(rows)} rows")
+        if not args.dry_run:
+            publish(data)

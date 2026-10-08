@@ -34,19 +34,32 @@ def main():
         value_deserializer = lambda b: json.loads(b.decode("utf-8"))
     )
 
-    while True:
+    import time
+
+    MAX_SECONDS = 120    
+    MAX_ROWS    = 50000   
+
+    total = 0
+    empty_polls = 0
+    deadline = time.time() + MAX_SECONDS
+
+    while empty_polls < 3 and total < MAX_ROWS and time.time() < deadline:
         batches = consumer.poll(timeout_ms=5000, max_records=500)
         messages = [m for msgs in batches.values() for m in msgs]
         if not messages:
-            break
+            empty_polls += 1
+            continue
+        empty_polls = 0
 
         rows = [tuple(m.value.get(c) for c in COLUMNS) for m in messages]
         with conn.cursor() as cur:
             execute_values(cur, INSERT_SQL, rows)
         conn.commit()
         consumer.commit()
+        total += len(rows)
 
+    print(f"Inserted {total} rows into {TABLE}")
+    consumer.close()
     conn.close()
-
 if __name__ == "__main__":
     main()
